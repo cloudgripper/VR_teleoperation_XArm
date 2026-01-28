@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Minimal Controller Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        button { 
+            padding: 20px 40px; 
+            font-size: 24px; 
+            margin: 10px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+        button:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed;
+        }
+        #info {
+            background: rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            font-size: 18px;
+            max-width: 600px;
+            text-align: center;
+        }
+        .controller-info {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            margin: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Quest 2 Controller Test</h1>
+    
+    <button id="enterVR">Enter VR Mode</button>
+    
+    <div id="info">
+        <div id="status">Ready to start...</div>
+        <div id="controllers"></div>
+    </div>
+
+    <script>
+        let xrSession = null;
+        let xrRefSpace = null;
+        let ws = null;
+        let isStreaming = false;
+
+        const status = document.getElementById('status');
+        const controllersDiv = document.getElementById('controllers');
+
+	let reconnectAttempts = 0;
+	let reconnectTimer = null;
+	const MAX_RECONNECT_DELAY = 5000;
+
+        // Enter VR Mode
+        document.getElementById('enterVR').onclick = async () => {
+            if (!navigator.xr) {
+                status.textContent = 'WebXR not available';
+                return;
+            }
+
+            try {
+                // Request immersive VR session
+                xrSession = await navigator.xr.requestSession('immersive-vr', {
+                    requiredFeatures: ['local'],
+                    optionalFeatures: ['local-floor', 'bounded-floor']
+                });
+
+                // Set up WebGL (required for session to work)
+                const canvas = document.createElement('canvas');
+                document.body.appendChild(canvas);
+                const gl = canvas.getContext('webgl', { xrCompatible: true });
+                
+                await gl.makeXRCompatible();
+                xrSession.updateRenderState({
+                    baseLayer: new XRWebGLLayer(xrSession, gl)
+                });
+
+                // Get reference space
+                xrRefSpace = await xrSession.requestReferenceSpace('local');
+
+                // Handle session end
+		xrSession.addEventListener('end', () => {
+		    status.textContent = 'VR session ended';
+		    xrSession = null;
+		    document.getElementById('enterVR').disabled = false;
+		    
+		    if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		    }
+		    
+		    if (ws) {
+			ws.close();
+			ws = null;
+		    }
+		});
+
+                status.textContent = 'VR Active - Connecting...';
+                document.getElementById('enterVR').disabled = true;
+
+                // Auto-connect WebSocket
+                connectWebSocket();
+
+                // Start the frame loop
+                xrSession.requestAnimationFrame(onXRFrame);
+
+            } catch (err) {
+                status.textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        };
+
+        // Connect WebSocket
+	function connectWebSocket() {
+	    if (ws && ws.readyState === WebSocket.OPEN) return;
+	    
+	    const wsUrl = `ws://${window.location.host}/ws/controllers`;
+	    console.log('Connecting to:', wsUrl);
+	    
+	    try {
+		ws = new WebSocket(wsUrl);
+
+		ws.onopen = () => {
+		    status.textContent = 'Connected - Streaming data';
+		    isStreaming = true;
+		    reconnectAttempts = 0;
+		    if (reconnectTimer) {
+			clearTimeout(reconnectTimer);
+			reconnectTimer = null;
+		    }
+		};
+
+		ws.onerror = (err) => {
+		    console.error('WebSocket error:', err);
+		};
+
+		ws.onclose = () => {
+		    isStreaming = false;
+		    
+		    // Only attempt reconnect if still in VR session
+		    if (xrSession) {
+			status.textContent = `Reconnecting... (attempt ${reconnectAttempts + 1})`;
+			const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+			reconnectAttempts++;
+			
+			reconnectTimer = setTimeout(() => {
+			    connectWebSocket();
+			}, delay);
+		    } else {
+			status.textContent = 'Disconnected';
+		    }
+		};
+	    } catch (err) {
+		console.error('WebSocket connection failed:', err);
+		status.textContent = 'Connection failed - retrying...';
+	    }
+
+	}        
+	
+	// XR Frame Loop
+        function onXRFrame(time, frame) {
+            if (!xrSession) return;
+            xrSession.requestAnimationFrame(onXRFrame);
+
+            const sources = xrSession.inputSources;
+            
+            // Display controller info
+            if (sources.length > 0) {
+                let html = '<h3>Controllers Detected:</h3>';
+                const controllerData = [];
+
+                for (let source of sources) {
+                    const data = {
+                        handedness: source.handedness || 'none',
+                        connected: true
+                    };
+
+                    // Get grip pose
+                    if (source.gripSpace) {
+                        const gripPose = frame.getPose(source.gripSpace, xrRefSpace);
+                        if (gripPose) {
+                            const pos = gripPose.transform.position;
+                            const rot = gripPose.transform.orientation;
+                            
+                            data.grip = {
+                                position: { x: pos.x, y: pos.y, z: pos.z },
+                                quaternion: { x: rot.x, y: rot.y, z: rot.z, w: rot.w }
+                            };
+
+                            html += `<div class="controller-info">
+                                <strong>${source.handedness.toUpperCase()}</strong><br>
+                                Pos: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})<br>
+                                Quat: (${rot.x.toFixed(2)}, ${rot.y.toFixed(2)}, ${rot.z.toFixed(2)}, ${rot.w.toFixed(2)})
+                            </div>`;
+                        }
+                    }
+
+                    // Get button states
+                    if (source.gamepad) {
+                        data.buttons = Array.from(source.gamepad.buttons).map((btn, i) => ({
+                            index: i,
+                            pressed: btn.pressed,
+                            touched: btn.touched,
+                            value: btn.value
+                        }));
+                        data.axes = Array.from(source.gamepad.axes);
+
+                        // Show pressed buttons
+                        const pressed = data.buttons.filter(b => b.pressed).map(b => b.index);
+                        if (pressed.length > 0) {
+                            html += `<div>Buttons pressed: ${pressed.join(', ')}</div>`;
+                        }
+                    }
+
+                    controllerData.push(data);
+                }
+
+                controllersDiv.innerHTML = html;
+
+                // Send data via WebSocket
+                if (isStreaming && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        timestamp: Date.now(),
+                        frame_time: time,
+                        controllers: controllerData
+                    }));
+                }
+
+            } else {
+                controllersDiv.innerHTML = '<div>No controllers detected yet...<br>Press trigger buttons to activate!</div>';
+                
+                // Send heartbeat
+                if (isStreaming && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        timestamp: Date.now(),
+                        frame_time: time,
+                        controllers: [],
+                        type: 'heartbeat'
+                    }));
+                }
+            }
+        }
+
+        // Check WebXR support on load
+        window.addEventListener('load', () => {
+            if ('xr' in navigator) {
+                navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+                    if (supported) {
+                        status.textContent = 'WebXR ready! Click Enter VR Mode';
+                    } else {
+                        status.textContent = 'VR not supported on this device';
+                    }
+                });
+            } else {
+                status.textContent = 'WebXR not available in this browser';
+            }
+        });
+    </script>
+</body>
+</html>

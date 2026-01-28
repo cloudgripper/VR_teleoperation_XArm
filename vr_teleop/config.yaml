@@ -1,0 +1,74 @@
+# VR Teleoperation Configuration
+# All motion limits and parameters in one place
+
+motion_limits:
+  # Safety margin - keeps commanded values at this fraction of limits (0.0-1.0)
+  safety_margin: 0.8
+  # Acceleration needs significant headroom - robot calculates from actual velocity
+  accel_safety_margin: 0.25
+  
+  # Linear velocity limits (mm/s)
+  linear:
+    max_velocity: 80.0          # Maximum linear velocity magnitude
+    max_acceleration: 500.0     # Maximum linear acceleration (mm/s^2)
+  
+  # Angular velocity limits (deg/s)
+  angular:
+    max_velocity: 30.0          # Maximum angular velocity magnitude
+    max_acceleration: 150.0     # Maximum angular acceleration (deg/s^2)
+
+# Velocity calculation parameters
+velocity_calculator:
+  position_scale: 1.4           # VR position to velocity scaling
+  rotation_scale: 0.4           # VR rotation to velocity scaling
+  
+  # One-Euro filter parameters for linear velocity
+  linear_filter:
+    min_cutoff: 1.0             # Lower = smoother at low speeds
+    beta: 0.7                   # Higher = more responsive to quick movements
+    d_cutoff: 1.0               # Derivative cutoff 
+  
+  # One-Euro filter parameters for angular velocity
+  angular_filter:
+    min_cutoff: 1.0
+    beta: 0.4
+    d_cutoff: 1.0
+
+# Dead zone filter parameters
+dead_zone:
+  linear_threshold: 12.0        # mm/s - inner threshold (velocities below are zeroed)
+  angular_threshold: 2.0        # deg/s - inner threshold for angular
+  ramp_ratio: 2.0               # outer = inner * ramp_ratio, smooth transition between
+
+# Safety monitor parameters
+safety:
+  command_timeout: 0.5          # Seconds without command before stopping
+  boundary_buffer: 30.0         # mm - buffer before hard workspace limits
+  prediction_time: 0.1          # Seconds to predict position ahead 
+  
+  # Workspace limits (mm)
+  workspace:
+    x: [300, 650]               
+    y: [-250, 250]
+    z: [-10, 400]
+
+# Robot hardware parameters (sent to xArm SDK)
+robot_limits:
+  tcp_max_acceleration: 2500    # mm/s^2 - conservative limit for TCP
+  joint_max_acceleration: 60    # deg/s^2 - conservative limit for joints
+  reduced_max_tcp_speed: 150    # mm/s - reduced mode speed limit
+  reduced_max_joint_speed: 25   # deg/s - reduced mode joint speed
+  collision_sensitivity: 2      # 1-5, lower = more sensitive
+  teach_sensitivity: 3          # 1-5
+
+# Data recording parameters
+recording:
+  save_fps: 3.0                 # Rate to save frames/trajectory to disk
+  robot_state_poll_hz: 50.0     # Robot state polling rate (for safety monitor)
+
+# Camera parameters
+camera:
+  width: 640
+  height: 480
+  fps: 15
+  align_depth: true

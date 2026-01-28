@@ -1,0 +1,28 @@
+[project]
+name = "vr-robot-control"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "aiortc>=1.13.0",
+    "fastapi>=0.116.1",
+    "flatbuffers>=25.2.10",
+    "glfw>=2.9.0",
+    "matplotlib>=3.10.6",
+    "numpy>=2.2.6",
+    "numpy-quaternion>=2024.0.12",
+    "opencv-python>=4.11.0.86",
+    "pyopengl>=3.1.10",
+    "pyopenxr>=1.1.5002",
+    "pyrealsense2>=2.56.5.9235",
+    "pyyaml>=6.0.3",
+    "uvicorn>=0.35.0",
+    "xarm-python-sdk>=1.17.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "RobotController",
+]
