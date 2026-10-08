@@ -107,3 +107,11 @@ Recorded sessions are saved to the `recordings/` directory with:
 - `trajectory.json` — Human-readable trajectory with actions
 - `trajectory.npz` — NumPy arrays (efficient, not human-readable)
 - `camera_intrinsics.json` — Camera calibration data
+
+## Acknowledgement
+
+This work was supported by the European Commission under the Horizon Europe Framework Programme project SoftEnable, under Grant 101070600.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
